@@ -1,0 +1,19 @@
+[project]
+name = "snyk-ai"
+version = "0.1.0"
+description = "Hybrid RAG system for security vulnerability data"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.76.0",
+    "openai>=2.15.0",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+]
+
+[project.scripts]
+snyk-ai = "snyk_ai.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
