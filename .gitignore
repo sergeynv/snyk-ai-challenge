@@ -23,3 +23,6 @@ build/
 # Environment variables
 .env
 .env.local
+
+# Data (do `add -f`)
+data/
