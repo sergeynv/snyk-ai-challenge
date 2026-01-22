@@ -26,3 +26,6 @@ build/
 
 # Data (do `add -f`)
 data/
+
+# Notebooks cache
+notebooks/.ipynb_checkpoints/

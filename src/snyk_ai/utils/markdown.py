@@ -112,7 +112,7 @@ def _parse_code_block(lines: list[str], start: int) -> tuple[Block, int]:
     ), i + 1
 
 def _is_table_line(line: str) -> bool:
-    return line.startswith("|") and line.endswith("|") and line.size() > 1
+    return line.startswith("|") and line.endswith("|") and len(line) > 1
 
 
 def _is_table_separator(line: str) -> bool:

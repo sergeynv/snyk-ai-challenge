@@ -63,3 +63,9 @@ uv run snyk-ai ollama:mistral
 uv run snyk-ai openai:gpt-5.2
 uv run snyk-ai anthropic:claude-haiku-4-5
 ```
+
+## Notebooks
+
+```bash
+uv run jupyter notebook notebooks/advisories.ipynb
+```
