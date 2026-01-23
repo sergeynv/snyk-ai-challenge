@@ -11,7 +11,7 @@ class BlockType(Enum):
     PARAGRAPH = "paragraph"
     CODE_BLOCK = "code_block"
     TABLE = "table"
-    LIST = "list"
+    LIST_ITEM = "list_item"
 
 
 @dataclass
@@ -70,15 +70,38 @@ def parse_markdown_document(doc_path: Path) -> list[Block]:
 
         # list? (unordered oder ordered)
         if _is_list_item(lines[i]):
-            block, i = _parse_list(lines, i)
-            blocks.append(block)
+            # the parsed out blocks can be either LIST_ITEM-s (most of the actually are)
+            # or CODE_BLOCK-s (embedded into the list items)
+            list_blocks, i = _parse_list(lines, i)
+            blocks.extend(list_blocks)
             continue
 
         # if none of the above: paragraph
         block, i = _parse_paragraph(lines, i)
         blocks.append(block)
 
+    __validate_block_counts(lines, blocks)
+
     return blocks
+
+
+def __validate_block_counts(lines: list[str], blocks: list[Block]):
+    """Quick and easy sanity check to make sure we don't skip over any code blocks again."""
+    in_code_block = False
+    num_headers = 0
+    num_code_fences = 0
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            num_code_fences += 1
+            in_code_block = not in_code_block
+        elif not in_code_block and line.startswith("#"):
+            num_headers += 1
+
+    assert not in_code_block
+
+    assert sum(1 for b in blocks if b.type is BlockType.HEADER) == num_headers
+    assert sum(1 for b in blocks if b.type is BlockType.CODE_BLOCK) == num_code_fences // 2  # fmt: skip
 
 
 def _parse_header(line: str) -> Block | None:
@@ -91,7 +114,9 @@ def _parse_header(line: str) -> Block | None:
 
 
 def _parse_code_block(lines: list[str], start: int) -> tuple[Block, int]:
-    first_line = lines[start].strip()
+    first_line = lines[start]
+    fence_indent = _get_indent(first_line)
+    first_line = first_line.strip()
     language = first_line[3:].strip() or None
 
     code_lines = []
@@ -100,7 +125,7 @@ def _parse_code_block(lines: list[str], start: int) -> tuple[Block, int]:
     while i < len(lines):
         if lines[i].strip().startswith("```"):
             break
-        code_lines.append(lines[i])
+        code_lines.append(_strip_indent(lines[i], fence_indent))
         i += 1
 
     content = "\n".join(code_lines)
@@ -210,43 +235,72 @@ def _is_list_item(line: str) -> bool:
     return False
 
 
-def _get_list_indent(line: str) -> int:
-    """Get the indentation level of a line."""
+def _get_indent(line: str) -> int:
+    """Get the indentation level (leading whitespace count) of a line."""
     return len(line) - len(line.lstrip())
 
 
-def _parse_list(lines: list[str], start: int) -> tuple[Block, int]:
-    """Parse a list (ordered or unordered)."""
-    list_lines = []
+def _strip_indent(line: str, indent: int) -> str:
+    """Strip up to `indent` leading whitespace characters from line."""
+    if indent <= 0:
+        return line
+    leading = len(line) - len(line.lstrip())
+    strip_count = min(leading, indent)
+    return line[strip_count:]
+
+
+def _parse_list(lines: list[str], start: int) -> tuple[list[Block], int]:
+    """Parse a list (ordered or unordered), returning LIST_ITEM and CODE_BLOCK blocks."""
+    blocks: list[Block] = []
     i = start  # line index
-    base_indent = _get_list_indent(lines[start])
+    base_indent = _get_indent(lines[start])
+
+    current_item_lines: list[str] = []
+
+    def flush_current_item():
+        if current_item_lines:
+            content = "\n".join(current_item_lines)
+            blocks.append(
+                Block(
+                    type=BlockType.LIST_ITEM,
+                    content=content,
+                    level=base_indent,
+                    lines=list(current_item_lines),
+                )
+            )
+            current_item_lines.clear()
 
     while i < len(lines):
         line = lines[i]
+        stripped = line.strip()
 
-        if not line.strip():
-            # this line is blank; is the following line blank as well?
+        if not stripped:
+            # blank line - check if next line continues the list
             if i + 1 < len(lines) and _is_list_item(lines[i + 1]):
+                current_item_lines.append(line)
                 i += 1
                 continue
             break
 
-        current_indent = _get_list_indent(line)
+        # code block within list?
+        if stripped.startswith("```"):
+            flush_current_item()
+            code_block, i = _parse_code_block(lines, i)
+            blocks.append(code_block)
+            continue
 
-        # Continue if it's a list item or indented continuation
+        current_indent = _get_indent(line)
+
         if _is_list_item(line) or current_indent > base_indent:
-            list_lines.append(line)
+            if _is_list_item(line) and current_item_lines:
+                flush_current_item()
+            current_item_lines.append(line)
             i += 1
         else:
             break
 
-    content = "\n".join(list_lines)
-    return Block(
-        type=BlockType.LIST,
-        content=content,
-        level=base_indent,
-        lines=list_lines,
-    ), i
+    flush_current_item()
+    return blocks, i
 
 
 def _parse_paragraph(lines: list[str], start: int) -> tuple[Block, int]:
