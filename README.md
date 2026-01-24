@@ -68,4 +68,5 @@ uv run snyk-ai anthropic:claude-haiku-4-5
 
 ```bash
 uv run jupyter notebook notebooks/advisories.ipynb
+uv run jupyter notebook notebooks/explore_advisories
 ```

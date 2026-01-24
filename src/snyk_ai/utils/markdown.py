@@ -25,8 +25,8 @@ class Block:
     lines: list[str] = field(default_factory=list)  # Raw lines for tables/lists
 
     # for tables:
-    table_header: list[str] | None = None  # column headers
-    table_rows: list[list[str]] | None = None  # data rows
+    header: list[str] | None = None  # column headers
+    rows: list[list[str]] | None = None  # data rows
 
 
 def parse_markdown_document(doc_path: Path) -> list[Block]:
@@ -218,8 +218,8 @@ def _parse_table(lines: list[str], start: int) -> tuple[Block, int]:
         type=BlockType.TABLE,
         content=content,
         lines=table_lines,
-        table_header=header_cells,
-        table_rows=data_rows,
+        header=header_cells,
+        rows=data_rows,
     ), i
 
 
