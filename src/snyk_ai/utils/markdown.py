@@ -222,17 +222,28 @@ def _parse_table(lines: list[str], start: int) -> tuple[Block, int]:
         rows=data_rows,
     ), i
 
-
 def _is_list_item(line: str) -> bool:
-    """Check if a line is a list item."""
+    return _check_if_list_item_line(line)[0]
+
+def _check_if_list_item_line(line: str) -> tuple[bool, str]:
+    """Check if a line is a list item, and strip the marker if so.
+
+    Returns:
+        Tuple of (is_list_item, content) where:
+        - If list item: (True, content with marker stripped)
+        - If not: (False, original line unchanged)
+    """
     stripped = line.lstrip()
-    # Unordered: -, *, +
-    if re.match(r"^[-*+]\s+", stripped):
-        return True
-    # Ordered: 1., 2., etc.
-    if re.match(r"^\d+\.\s+", stripped):
-        return True
-    return False
+    # unordered (-, *, +)?
+    match = re.match(r"^[-*+]\s+(.*)$", stripped)
+    if match:
+        return True, match.group(1)
+    # ordered (1., 2., etc.)?
+    match = re.match(r"^\d+\.\s+(.*)$", stripped)
+    if match:
+        return True, match.group(1)
+    # continuation line
+    return False, line
 
 
 def _get_indent(line: str) -> int:
@@ -259,7 +270,7 @@ def _parse_list(lines: list[str], start: int) -> tuple[list[Block], int]:
 
     def flush_current_item():
         if current_item_lines:
-            content = "\n".join(current_item_lines)
+            content = " ".join(current_item_lines)
             blocks.append(
                 Block(
                     type=BlockType.LIST_ITEM,
@@ -277,12 +288,11 @@ def _parse_list(lines: list[str], start: int) -> tuple[list[Block], int]:
         if not stripped:
             # blank line - check if next line continues the list
             if i + 1 < len(lines) and _is_list_item(lines[i + 1]):
-                current_item_lines.append(line)
                 i += 1
                 continue
             break
 
-        # code block within list?
+        # code block within the list?
         if stripped.startswith("```"):
             flush_current_item()
             code_block, i = _parse_code_block(lines, i)
@@ -291,8 +301,11 @@ def _parse_list(lines: list[str], start: int) -> tuple[list[Block], int]:
 
         current_indent = _get_indent(line)
 
-        if _is_list_item(line) or current_indent > base_indent:
-            if _is_list_item(line) and current_item_lines:
+        # if a list item, will also strip indent and/or list marker
+        is_list_item, line = _check_if_list_item_line(line)
+
+        if is_list_item or current_indent > base_indent:
+            if is_list_item and current_item_lines:
                 flush_current_item()
             current_item_lines.append(line)
             i += 1
