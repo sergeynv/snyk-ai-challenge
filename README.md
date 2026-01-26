@@ -92,6 +92,32 @@ for advisory, section_indices in results:
 
 Chunks are stored with metadata: `advisory_filename`, `section_index`.
 
+## Structured Database
+
+The `Database` class loads CSV vulnerability data into SQLite and exposes it via tool-use interface.
+
+```python
+from snyk_ai.database import Database
+
+# Load from directory containing CSV files
+db = Database("data/csv")
+
+# Get tool definitions (OpenAI-compatible format)
+print(db.tools)
+
+# Call tools directly
+print(db.call_tool("get_vulnerability", {"cve_id": "CVE-2024-1234"}))
+print(db.call_tool("search_vulnerabilities", {"severity": "Critical"}))
+print(db.call_tool("list_packages", {"ecosystem": "npm"}))
+print(db.call_tool("get_statistics", {"group_by": "severity"}))
+```
+
+Available tools:
+- `get_vulnerability(cve_id)` - Get details for a specific CVE
+- `search_vulnerabilities(ecosystem?, severity?, type?, min_cvss?, max_cvss?)` - Filter vulnerabilities
+- `list_packages(ecosystem?)` - List packages
+- `get_statistics(group_by?)` - Aggregate by ecosystem/severity/type
+
 ## Notebooks
 
 ```bash
