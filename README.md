@@ -118,6 +118,35 @@ Available tools:
 - `list_packages(ecosystem?)` - List packages
 - `get_statistics(group_by?)` - Aggregate by ecosystem/severity/type
 
+## Query Router
+
+The `Router` classifies user queries and transforms them for downstream processing. It uses an LLM to determine whether a query needs advisory search (unstructured), database lookup (structured), both (hybrid), or neither (none).
+
+```python
+from snyk_ai.router import Router, RouteType, RouteValidationError
+from snyk_ai.advisories import Advisories
+from snyk_ai.models import create_model
+
+model = create_model("ollama:llama3.2")
+advisories = Advisories("data/advisories")
+
+router = Router(model, advisories)
+result = router.route("How does SQL injection work?")
+
+print(result.route_type)          # RouteType.UNSTRUCTURED
+print(result.unstructured_query)  # Transformed query for semantic search
+print(result.structured_query)    # Transformed query for database (or None)
+print(result.reasoning)           # Explanation of routing decision
+```
+
+Route types:
+- `UNSTRUCTURED` - Query advisory content (explanations, attack patterns, remediation)
+- `STRUCTURED` - Query database (CVE lookups, filtering, statistics)
+- `HYBRID` - Query both sources (default when uncertain)
+- `NONE` - Off-topic, not security-related
+
+Raises `RouteValidationError` if LLM response is malformed.
+
 ## Notebooks
 
 ```bash
