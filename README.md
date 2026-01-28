@@ -50,18 +50,28 @@ Requires `OPENAI_API_KEY` env variable.
 ## Usage
 
 ```bash
-# Default (Ollama with llama3.2)
-uv run snyk-ai
+uv run snyk-ai <data_dir> [--model MODEL] [--verbose]
+```
 
-# Specify provider only (uses default model)
-uv run snyk-ai ollama
-uv run snyk-ai openai
-uv run snyk-ai anthropic
+Arguments:
+- `data_dir` - Path to data directory (must contain `advisories/` and `csv/` subdirectories)
+- `--model`, `-m` - Model spec in `provider:model` format (default: `ollama:llama3.2`)
+- `--verbose`, `-v` - Enable verbose logging
 
-# Specify provider and model
-uv run snyk-ai ollama:mistral
-uv run snyk-ai openai:gpt-5.2
-uv run snyk-ai anthropic:claude-haiku-4-5
+Examples:
+
+```bash
+# Basic usage (default model: ollama:llama3.2)
+uv run snyk-ai data
+
+# Specify model
+uv run snyk-ai data --model ollama:mistral
+uv run snyk-ai data -m openai:gpt-5.2
+uv run snyk-ai data --model anthropic:claude-haiku-4-5
+
+# Enable verbose logging
+uv run snyk-ai data --verbose
+uv run snyk-ai data -v -m ollama:mistral
 ```
 
 ## Vector Database (Advisories)
@@ -173,6 +183,35 @@ Result fields:
 - `answer` - LLM-synthesized answer based on retrieved context
 - `sources` - List of `SourceReference` (advisory_title, section_header, advisory_filename)
 - `query` - The original query
+
+## Agent
+
+The `Agent` class orchestrates all components (Router, Advisories, AdvisoriesRag, Database) into a unified RAG pipeline.
+
+```python
+from snyk_ai.agent import Agent
+from snyk_ai.models import create_model
+
+model = create_model("ollama:llama3.2")
+agent = Agent(
+    advisories_dir="data/advisories",
+    csv_dir="data/csv",
+    router_model=model,
+    advisories_rag_model=model,
+    code_summarizing_model=model,
+    db_query_model=model,
+)
+
+# Process user queries
+response = agent.process_user_query("How does SQL injection work?")
+print(response)
+```
+
+Query handling:
+- `UNSTRUCTURED` - Semantic search over advisories + LLM synthesis
+- `STRUCTURED` - Database queries (not yet implemented)
+- `HYBRID` - Both sources (not yet implemented)
+- `NONE` - Off-topic queries get a polite rejection
 
 ## Notebooks
 

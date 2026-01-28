@@ -7,12 +7,17 @@ from snyk_ai.agent import Agent
 from snyk_ai.utils.log import log, set_verbose
 
 
-def chatbot(agent: Agent):
+def run(agent: Agent):
+    log("main", "Running...")
+
+    # we are only handling standalone queries (no follow-up question),
+    # the loop here just to handle the "blank" input
     while True:
         try:
             user_input = input("\nQ: ").strip()
             if not user_input:
                 continue
+            print()
 
             response = agent.process_user_query(user_input)
             print(f"\nA: {response}")
@@ -25,11 +30,10 @@ def chatbot(agent: Agent):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Security vulnerability chatbot")
+    parser = argparse.ArgumentParser(description="Security vulnerability assistant")
     parser.add_argument("data_dir", type=Path, help="Path to data directory")
     parser.add_argument(
-        "model",
-        nargs="?",
+        "--model", "-m",
         default="ollama:llama3.2",
         help="Model spec (default: ollama:llama3.2)",
     )
@@ -40,15 +44,15 @@ def main():
 
     set_verbose(args.verbose)
 
-    # Validate data_dir
+    # validate data_dir
     advisories_dir = args.data_dir / "advisories"
     csv_dir = args.data_dir / "csv"
 
     if not advisories_dir.is_dir():
-        print(f"Error: {advisories_dir} not found")
+        print(f"🛑 Error: {advisories_dir} not found")
         sys.exit(1)
     if not csv_dir.is_dir():
-        print(f"Error: {csv_dir} not found")
+        print(f"🛑 Error: {csv_dir} not found")
         sys.exit(1)
 
     try:
@@ -59,6 +63,7 @@ def main():
 
     log("main", f"Using model: {model.name}")
     log("main", "Initializing agent...")
+
     agent = Agent(
         advisories_dir,
         csv_dir,
@@ -67,7 +72,10 @@ def main():
         code_summarizing_model=model,
         db_query_model=model,
     )
-    chatbot(agent)
+
+    log("main", "Agent initialized ✅")
+
+    run(agent)
 
 
 if __name__ == "__main__":
