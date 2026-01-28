@@ -4,6 +4,7 @@ from pathlib import Path
 
 from snyk_ai import create_model
 from snyk_ai.agent import Agent
+from snyk_ai.utils.log import log, set_verbose
 
 
 def chatbot(agent: Agent):
@@ -32,7 +33,12 @@ def main():
         default="ollama:llama3.2",
         help="Model spec (default: ollama:llama3.2)",
     )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
+    )
     args = parser.parse_args()
+
+    set_verbose(args.verbose)
 
     # Validate data_dir
     advisories_dir = args.data_dir / "advisories"
@@ -51,8 +57,8 @@ def main():
         print(f"Error: {e}")
         sys.exit(1)
 
-    print(f"Using model: {model.name}")
-    print("Initializing agent...")
+    log("main", f"Using model: {model.name}")
+    log("main", "Initializing agent...")
     agent = Agent(
         advisories_dir,
         csv_dir,
