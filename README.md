@@ -147,6 +147,33 @@ Route types:
 
 Raises `RouteValidationError` if LLM response is malformed.
 
+## Advisories RAG
+
+The `AdvisoriesRag` class handles unstructured queries by performing semantic search over advisories and synthesizing answers using an LLM.
+
+```python
+from snyk_ai.advisories_rag import AdvisoriesRag, AdvisoryResult
+from snyk_ai.advisories import Advisories
+from snyk_ai.models import create_model
+
+model = create_model("ollama:llama3.2")
+advisories = Advisories("data/advisories")
+advisories.init_vectordb(model)
+
+rag = AdvisoriesRag(model, advisories)
+result = rag.query("How do I prevent SQL injection?")
+
+print(result.answer)   # Synthesized answer from LLM
+print(result.query)    # Original query
+for src in result.sources:
+    print(f"  - {src.advisory_title}: {src.section_header}")
+```
+
+Result fields:
+- `answer` - LLM-synthesized answer based on retrieved context
+- `sources` - List of `SourceReference` (advisory_title, section_header, advisory_filename)
+- `query` - The original query
+
 ## Notebooks
 
 ```bash
