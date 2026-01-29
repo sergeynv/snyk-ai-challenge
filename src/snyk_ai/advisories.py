@@ -1,36 +1,3 @@
-"""Security advisory document parsing and management.
-
-Public API
-----------
-Advisories
-    Main class for loading and searching security advisories.
-
-    Constructor:
-        Advisories(directory)
-            Load and parse all advisory markdown files from a directory.
-
-    Methods:
-        init_vectordb(model)
-            Initialize ChromaDB vector database with embedded advisory chunks.
-            Must be called before search().
-
-        search(query, top_k=5) -> list[tuple[Advisory, list[int]]]
-            Semantic search for relevant sections matching the query.
-            Returns (advisory, section_indices) tuples for RAG augmentation.
-
-Advisory
-    A parsed security advisory document with:
-    - filename, path, title, executive_summary
-    - blocks: list[Block] - all parsed markdown blocks
-    - sections: list[Section] - blocks grouped by header
-
-Section
-    A section of an advisory document (blocks between two headers).
-    - header: Block - the section header
-    - blocks: list[Block] - content blocks in this section
-    - to_text() - render section as markdown text
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -40,6 +7,7 @@ import chromadb
 from chromadb.utils import embedding_functions
 
 from snyk_ai.models import Model
+from snyk_ai.utils.log import log
 from snyk_ai.utils.markdown import (
     Block,
     BlockType,
@@ -52,35 +20,10 @@ from snyk_ai.utils.text import (
 
 
 class Advisories:
-    """Collection of parsed security advisory documents with semantic search.
-
-    This is the main entry point for working with security advisories.
-
-    Public API
-    ----------
-    __init__(directory)
-        Load all advisory markdown files from the given directory.
-
-    init_vectordb(model)
-        Initialize the vector database with embedded advisory chunks.
-        Must be called before search(). Uses ChromaDB (in-memory) and
-        sentence-transformers for embeddings.
-
-    search(query, top_k=5) -> list[tuple[Advisory, list[int]]]
-        Semantic search for relevant sections. Returns tuples of
-        (Advisory, section_indices) sorted by relevance. Each advisory
-        appears at most once; section_indices point to matching sections.
-    """
+    """Collection of parsed security advisory documents prepared for semantic search."""
 
     def __init__(self, directory: Path | str):
-        """Load advisories from a directory.
-
-        Args:
-            directory: Path to directory containing advisory markdown files.
-
-        Raises:
-            FileNotFoundError: If directory does not exist.
-        """
+        """Load advisories from a directory."""
         self.directory = Path(directory).resolve()
 
         if not self.directory.is_dir():
@@ -89,7 +32,7 @@ class Advisories:
         self._advisories: dict[str, Advisory] = {}
         self._load_advisories()
 
-        # Vector DB (initialized lazily via init_vectordb)
+        # vector DB (initialized lazily via init_vectordb)
         self._chroma_client: chromadb.Client | None = None
         self._collection: chromadb.Collection | None = None
 
@@ -155,9 +98,9 @@ class Advisories:
     def init_vectordb(self, model: Model) -> None:
         """Initialize the vector database with all advisory chunks.
 
-        Creates an ephemeral (in-memory) ChromaDB instance, generates
-        embeddings for all chunks using sentence-transformers, and stores
-        them with metadata linking back to source sections.
+        Uses a persistent ChromaDB instance stored in .chroma directory.
+        If the database already exists and has data, it is loaded instead
+        of being rebuilt.
 
         This must be called before search().
 
@@ -168,21 +111,29 @@ class Advisories:
             ValueError: If any advisory contains code blocks but no model
                 is available for summarization.
         """
-        # 1. Create ephemeral ChromaDB client
-        self._chroma_client = chromadb.Client()
+        # 1. Use PersistentClient with dot-directory
+        chroma_path = self.directory / ".chroma"
+        self._chroma_client = chromadb.PersistentClient(path=str(chroma_path))
 
         # 2. Set up sentence-transformer embedding function
         embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name="all-MiniLM-L6-v2"
         )
 
-        # 3. Create collection
-        self._collection = self._chroma_client.create_collection(
+        # 3. Get or create collection
+        self._collection = self._chroma_client.get_or_create_collection(
             name="advisories",
             embedding_function=embedding_fn,
         )
 
-        # 4. Prepare data for batch insert
+        # 4. Skip if already populated
+        if self._collection.count() > 0:
+            log("advisories", f"Loaded persisted vector DB ({self._collection.count()} chunks)")
+            return
+
+        log("advisories", "Building vector DB (this may take a while)...")
+
+        # 5. Prepare data for batch insert
         ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict] = []
@@ -201,13 +152,14 @@ class Advisories:
                         "section_index": section_idx,
                     })
 
-        # 5. Add all chunks to collection in one batch
+        # 6. Add all chunks to collection in one batch
         if ids:
             self._collection.add(
                 ids=ids,
                 documents=documents,
                 metadatas=metadatas,
             )
+            log("advisories", f"Vector DB built ({len(ids)} chunks)")
 
     def search(self, query: str, top_k: int = 5) -> list[tuple[Advisory, list[int]]]:
         """Search for relevant sections matching the query.
