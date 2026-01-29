@@ -20,21 +20,22 @@ class Agent:
         code_summarizing_model: Model,
         db_query_model: Model,
     ):
-        _log("Initializing components...")
-
+        log("Initializing Advisories...")
         self._advisories = Advisories(advisories_dir)
+        log("Initializing Advisories' Vector DB...")
         self._advisories.init_vectordb(code_summarizing_model)
-        _log("Advisories (incl. vector DB) initialized ✅")
+        log("Advisories initialized")
 
+        log("Initializing other components...")
         self._advisories_rag = AdvisoriesRag(advisories_rag_model, self._advisories)
         self._database = Database(csv_dir)
         self._router = Router(router_model, self._advisories)
-        _log("RAG, DB and Router initialized ✅")
+        log("RAG, DB and Router initialized")
 
     def process_user_query(self, query: str) -> str:
-        _log("Routing query...")
+        log("Routing query...")
         routing = self._router.route(query)
-        _log(
+        log(
             f'Routing completed: {routing.route_type.value.upper()} ("{routing.reasoning}")'
         )
 
@@ -54,7 +55,3 @@ class Agent:
 
         # STRUCTURED or HYBRID - not yet implemented
         return f"I cannot handle {routing.route_type.value.upper()} queries yet."
-
-
-def _log(message):
-    log("agent", message)

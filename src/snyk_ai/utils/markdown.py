@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from snyk_ai.utils.log import log
 
 class BlockType(Enum):
     HEADER = "header"
@@ -34,6 +35,8 @@ def parse_markdown_document(doc_path: Path) -> list[Block]:
     Parse a markdown document into a list of blocks headers, paragraphs,
     code blocks, tables and lists.
     """
+    log(f"Parsing {doc_path}...")
+
     content = doc_path.read_text(encoding="utf-8")
     lines = content.split("\n")
 
@@ -81,6 +84,8 @@ def parse_markdown_document(doc_path: Path) -> list[Block]:
         blocks.append(block)
 
     __validate_block_counts(lines, blocks)
+
+    log(f"Parsed {doc_path.name}: {len(blocks)} Markdown blocks")
 
     return blocks
 

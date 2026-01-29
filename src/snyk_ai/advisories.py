@@ -37,14 +37,14 @@ class Advisories:
         self._collection: chromadb.Collection | None = None
 
     def _load_advisories(self) -> None:
-        """Load and parse all markdown files from the directory."""
+        log("Loading advisory markdown documents...")
         for path in sorted(self.directory.glob("*.md")):
             blocks = parse_markdown_document(path)
             advisory = self._parse_advisory(path, blocks)
             self._advisories[path.name] = advisory
+        log(f"Loaded {len(self._advisories)} documents")
 
     def _parse_advisory(self, path: Path, blocks: list[Block]) -> Advisory:
-        """Parse blocks into an Advisory, validating structure."""
         filename = path.name
 
         _validate_structure(filename, blocks)
@@ -52,6 +52,8 @@ class Advisories:
         title = blocks[0].content.removeprefix("Security Advisory: ")
         executive_summary = blocks[3].content
         sections = _extract_sections(blocks)
+
+        log(f"Parsed {filename} advisory: {len(sections)} sections")
 
         return Advisory(
             filename=filename,
@@ -128,10 +130,10 @@ class Advisories:
 
         # 4. Skip if already populated
         if self._collection.count() > 0:
-            log("advisories", f"Loaded persisted vector DB ({self._collection.count()} chunks)")
+            log(f"Loaded persisted vector DB ({self._collection.count()} chunks)")
             return
 
-        log("advisories", "Building vector DB (this may take a while)...")
+        log("Building vector DB (this may take a while)...")
 
         # 5. Prepare data for batch insert
         ids: list[str] = []
@@ -159,7 +161,7 @@ class Advisories:
                 documents=documents,
                 metadatas=metadatas,
             )
-            log("advisories", f"Vector DB built ({len(ids)} chunks)")
+            log(f"Vector DB built ({len(ids)} chunks)")
 
     def search(self, query: str, top_k: int = 5) -> list[tuple[Advisory, list[int]]]:
         """Search for relevant sections matching the query.

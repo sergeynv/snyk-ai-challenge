@@ -8,7 +8,7 @@ from snyk_ai.utils.log import log, set_verbose
 
 
 def run(agent: Agent):
-    log("main", "Running...")
+    log("Running...")
 
     # we are only handling standalone queries (no follow-up question),
     # the loop here just to handle the "blank" input
@@ -61,8 +61,8 @@ def main():
         print(f"Error: {e}")
         sys.exit(1)
 
-    log("main", f"Using model: {model.name}")
-    log("main", "Initializing agent...")
+    log(f"Using model: {model.name}")
+    log("Initializing agent...")
 
     agent = Agent(
         advisories_dir,
@@ -73,7 +73,7 @@ def main():
         db_query_model=model,
     )
 
-    log("main", "Agent initialized ✅")
+    log("Agent initialized")
 
     run(agent)
 
