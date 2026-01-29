@@ -71,6 +71,7 @@ def main():
         advisories_rag_model=model,
         code_summarizing_model=model,
         db_query_model=model,
+        synthesizer_model=model,
     )
 
     log("Agent initialized")
