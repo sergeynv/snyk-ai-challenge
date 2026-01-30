@@ -56,10 +56,11 @@ class Agent:
             return self._database_rag.query(routing.structured_query)
 
         if routing.route_type is RouteType.HYBRID:
-            log("Querying both sources...")
+            log("1. Querying advisories...")
             unstructured_answer = self._advisories_rag.query(routing.unstructured_query)
+            log("2. Querying database...")
             structured_answer = self._database_rag.query(routing.structured_query)
-            log("Synthesizing answers...")
+            log("3. Synthesizing combined answer...")
             return self._synthesizer.synthesize(
                 user_query=query,
                 router_reasoning=routing.reasoning,

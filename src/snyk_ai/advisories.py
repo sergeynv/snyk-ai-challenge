@@ -64,18 +64,6 @@ class Advisories:
             _sections=sections,
         )
 
-    def __getitem__(self, filename: str) -> Advisory:
-        return self._advisories[filename]
-
-    def __iter__(self):
-        return iter(self._advisories.values())
-
-    def __len__(self) -> int:
-        return len(self._advisories)
-
-    def __contains__(self, filename: str) -> bool:
-        return filename in self._advisories
-
     @property
     def filenames(self) -> list[str]:
         return list(self._advisories.keys())
@@ -229,6 +217,18 @@ class Advisories:
 
         return search_results
 
+    def __getitem__(self, filename: str) -> Advisory:
+        return self._advisories[filename]
+
+    def __iter__(self):
+        return iter(self._advisories.values())
+
+    def __len__(self) -> int:
+        return len(self._advisories)
+
+    def __contains__(self, filename: str) -> bool:
+        return filename in self._advisories
+
 
 @dataclass
 class Section:
@@ -321,11 +321,16 @@ def _extract_sections(blocks: list[Block]) -> list[Section]:
     Skips the "References" section (header + list items) at the end.
     The "Credits" section is preserved.
     """
-    # Handle end structure (validated by _validate_structure):
-    # ... -> "References" header -> list items -> "Credits" header -> paragraph
+
+    # handle "footer" of the document (validated by _validate_structure):
+    # -  [everything above the footer]
+    # - "References" header
+    # -  list items
+    # - "Credits" header
+    # -  paragraph
     credits_section = Section(header=blocks[-2], blocks=[blocks[-1]])
 
-    # Find "References" header by iterating backwards, skipping list items
+    # find "References" header by iterating backwards, skipping list items
     references_idx = len(blocks) - 3
     while references_idx >= 0:
         block = blocks[references_idx]
@@ -333,7 +338,7 @@ def _extract_sections(blocks: list[Block]) -> list[Section]:
             break
         references_idx -= 1
 
-    # Process blocks up to (not including) "References" header
+    # process blocks up to (but excluding) the "References" header
     sections: list[Section] = []
     current_section: Section | None = None
     header: Block | None = None
@@ -353,7 +358,7 @@ def _extract_sections(blocks: list[Block]) -> list[Section]:
     if current_section:
         sections.append(current_section)
 
-    # Add Credits section at the end
+    # add the "Credits" section at the end
     sections.append(credits_section)
 
     return sections
@@ -434,17 +439,14 @@ class Advisory:
 
     @property
     def sections(self) -> list[Section]:
-        """Return all sections for RAG retrieval."""
         return self._sections
 
     @property
     def code_blocks(self) -> list[Block]:
-        """Return all code blocks from the advisory."""
         return [b for b in self.blocks if b.type is BlockType.CODE_BLOCK]
 
     @property
     def headers(self) -> list[Block]:
-        """Return all headers from the advisory."""
         return [b for b in self.blocks if b.type is BlockType.HEADER]
 
     def get_chunks(self, model: Model) -> list[_Chunk]:
