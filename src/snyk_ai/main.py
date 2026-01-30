@@ -10,23 +10,30 @@ from snyk_ai.utils.log import log, set_verbose
 def run(agent: Agent):
     log("Running...")
 
-    # we are only handling standalone queries (no follow-up question),
-    # the loop here just to handle the "blank" input
+    # we are only handling standalone queries (no follow-up questions);
+    # but we are allowing the user to submit another question after answering one
+    # (mostly because initializing vector DB takes a while, otherwise we could
+    # just exit() after answering and start another process for the next question)
     while True:
         try:
             user_input = input("\nQ: ").strip()
+            if user_input.lower() == "exit":
+                print("Goodbye!")
+                break
             if not user_input:
                 continue
             print()
 
             response = agent.process_user_query(user_input)
             print(f"\nA: {response}")
+            print(f"\n{'-' * 10}")
 
         except KeyboardInterrupt:
-            pass
+            print("\nGoodbye!")
+            break
         except Exception as e:
             print(f"\nError: {e}")
-        break
+
 
 
 def main():
