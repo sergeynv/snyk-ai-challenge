@@ -45,19 +45,11 @@ class Agent:
         )
 
         if routing.route_type is RouteType.NONE:
-            return (
-                f"Your question appears to be off-topic: {routing.reasoning}\n"
-                f"\n"
-                f"I can help with:\n"
-                f"- Security advisories and vulnerability explanations\n"
-                f"- CVE lookups and vulnerability statistics\n"
-                f"- Remediation guidance\n"
-            )
+            return f"Your question appears to be off-topic: {routing.reasoning}\n"
 
         if routing.route_type is RouteType.UNSTRUCTURED:
             log("Querying advisories...")
-            result = self._advisories_rag.query(routing.unstructured_query)
-            return result.answer
+            return self._advisories_rag.query(routing.unstructured_query)
 
         if routing.route_type is RouteType.STRUCTURED:
             log("Querying database...")
@@ -65,7 +57,7 @@ class Agent:
 
         if routing.route_type is RouteType.HYBRID:
             log("Querying both sources...")
-            unstructured_answer = self._advisories_rag.query(routing.unstructured_query).answer
+            unstructured_answer = self._advisories_rag.query(routing.unstructured_query)
             structured_answer = self._database_rag.query(routing.structured_query)
             log("Synthesizing answers...")
             return self._synthesizer.synthesize(

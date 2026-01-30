@@ -1,55 +1,9 @@
-"""Advisory query handler for unstructured RAG queries.
-
-Public API
-----------
-AdvisoryHandler
-    Handles unstructured queries using semantic search over advisories.
-
-    Constructor:
-        AdvisoryHandler(model, advisories)
-
-    Methods:
-        query(unstructured_query) -> AdvisoryResult
-            Search advisories and synthesize an answer.
-
-AdvisoryResult
-    Result of an advisory query.
-    - answer: str - The synthesized answer
-    - sources: list[SourceReference] - Advisory sections used
-    - query: str - The original query
-
-SourceReference
-    Reference to a source advisory section.
-    - advisory_title: str
-    - section_header: str
-    - advisory_filename: str
-"""
-
-from dataclasses import dataclass
-
 from snyk_ai.advisories import Advisories, Advisory
 from snyk_ai.models import Model
 
 
-@dataclass
-class SourceReference:
-    """Reference to a source advisory section."""
-
-    advisory_title: str
-    section_header: str
-    advisory_filename: str
-
-
-@dataclass
-class AdvisoryResult:
-    """Result of querying advisories."""
-
-    answer: str
-    sources: list[SourceReference]
-    query: str
-
-
-_ADVISORY_PROMPT = """You are a security expert answering questions based on security advisory documents.
+_ADVISORY_PROMPT = """
+You are a security expert answering questions based on security advisory documents.
 
 CONTEXT FROM SECURITY ADVISORIES:
 {context}
@@ -63,15 +17,19 @@ INSTRUCTIONS:
 4. For remediation questions, include concrete steps (upgrade commands, code fixes)
 5. Keep your answer focused and concise
 
-ANSWER:""".strip()
+ANSWER:
+""".strip()
+
+_NO_SOURCES_ANSWER = """
+I couldn't find any relevant security advisory information for your question.
+""".strip()
 
 
 class AdvisoriesRag:
     """Handles unstructured queries using semantic search over advisories."""
 
     def __init__(self, model: Model, advisories: Advisories):
-        """Initialize handler with model and advisories.
-
+        """
         Args:
             model: LLM model for answer synthesis.
             advisories: Loaded advisories with initialized vector DB.
@@ -84,59 +42,35 @@ class AdvisoriesRag:
         unstructured_query: str,
         top_k: int = 3,
         model: Model | None = None,
-    ) -> AdvisoryResult:
+    ) -> str:
         """Search advisories and synthesize an answer.
 
         Args:
             unstructured_query: Natural language query about advisories.
             top_k: Maximum number of advisories to retrieve (default: 3).
             model: Optional model override for synthesis.
-
-        Returns:
-            AdvisoryResult with answer and source references.
         """
         if model is None:
             model = self._model
 
-        # 1. Semantic search
+        # 1. semantic search
         search_results = self._advisories.search(unstructured_query, top_k=top_k)
 
-        # 2. Handle no results
+        # 2. handle no results
         if not search_results:
-            return AdvisoryResult(
-                answer="I couldn't find any relevant security advisory information "
-                "for your question. Try rephrasing or asking about specific "
-                "vulnerability types (XSS, SQL injection, RCE) or CVE IDs.",
-                sources=[],
-                query=unstructured_query,
-            )
+            return _NO_SOURCES_ANSWER
 
-        # 3. Build context and collect sources
-        context, sources = self._format_context(search_results)
+        # 3. build context and collect sources
+        context = self._format_context(search_results)
 
-        # 4. Build prompt and generate answer
+        # 4. build prompt and generate answer
         prompt = _ADVISORY_PROMPT.format(context=context, query=unstructured_query)
         answer = model.generate(prompt)
 
-        return AdvisoryResult(
-            answer=answer.strip(),
-            sources=sources,
-            query=unstructured_query,
-        )
+        return answer.strip()
 
-    def _format_context(
-        self, search_results: list[tuple[Advisory, list[int]]]
-    ) -> tuple[str, list[SourceReference]]:
-        """Format search results into context string and collect sources.
-
-        Args:
-            search_results: List of (Advisory, section_indices) tuples.
-
-        Returns:
-            Tuple of (context_string, source_references).
-        """
+    def _format_context(self, search_results: list[tuple[Advisory, list[int]]]) -> str:
         context_parts: list[str] = []
-        sources: list[SourceReference] = []
 
         for advisory, section_indices in search_results:
             # Add advisory header
@@ -150,15 +84,6 @@ class AdvisoriesRag:
                     context_parts.append(section_text)
                     context_parts.append("")  # blank line between sections
 
-                    # Track source reference
-                    sources.append(
-                        SourceReference(
-                            advisory_title=advisory.title,
-                            section_header=section.header.content,
-                            advisory_filename=advisory.filename,
-                        )
-                    )
-
             context_parts.append("---\n")
 
-        return "\n".join(context_parts).strip(), sources
+        return "\n".join(context_parts).strip()
