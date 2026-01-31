@@ -132,14 +132,6 @@ class RouteResult:
     reasoning: str  # Explanation of why this routing was chosen
 
 
-def _format_advisory_summaries(advisories: Advisories) -> str:
-    lines = []
-    for advisory in advisories:
-        lines.append(f"- **{advisory.title}**")
-        lines.append(f"  {advisory.executive_summary}")
-    return "\n".join(lines)
-
-
 class Router:
     """Routes user queries to appropriate data sources using LLM classification."""
 
@@ -151,9 +143,15 @@ class Router:
             advisories: Loaded security advisories (used to build prompt, not stored).
         """
         self._model = model
+
         # pre-build prompt with the advisory summaries, leaving {query} placeholder
+        summaries_lines = []
+        for title, summary in advisories.get_summaries():
+            summaries_lines.append(f"- **{title}**")
+            summaries_lines.append(f"  {summary}")
+
         self._prompt_template = _ROUTER_PROMPT.replace(
-            "{advisory_summaries}", _format_advisory_summaries(advisories)
+            "{advisory_summaries}", "\n".join(summaries_lines)
         )
 
     def route(self, query: str, model: Model | None = None) -> RouteResult:

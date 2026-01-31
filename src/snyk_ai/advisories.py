@@ -68,6 +68,13 @@ class Advisories:
     def filenames(self) -> list[str]:
         return list(self._advisories.keys())
 
+    def get_summaries(self) -> list[tuple[str, str]]:
+        """Return (title, executive_summary) for each advisory."""
+        return [
+            (adv.title, adv.executive_summary)
+            for adv in self._advisories.values()
+        ]
+
     def _get_all_chunks(self, model: Model) -> list[_Chunk]:
         """Generate chunks from all advisories.
 
