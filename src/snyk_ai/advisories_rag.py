@@ -1,4 +1,4 @@
-from snyk_ai.advisories import Advisories, Advisory
+from snyk_ai.advisories import Advisories
 from snyk_ai.models import Model
 
 
@@ -6,7 +6,11 @@ _ADVISORY_PROMPT = """
 You are a security expert answering questions based on security advisory documents.
 
 CONTEXT FROM SECURITY ADVISORIES:
+================================================================================
+
 {context}
+
+================================================================================
 
 USER QUESTION: {query}
 
@@ -40,50 +44,25 @@ class AdvisoriesRag:
     def query(
         self,
         unstructured_query: str,
-        top_k: int = 3,
         model: Model | None = None,
     ) -> str:
         """Search advisories and synthesize an answer.
 
         Args:
             unstructured_query: Natural language query about advisories.
-            top_k: Maximum number of advisories to retrieve (default: 3).
-            model: Optional model override for synthesis.
+            model: Optional model override (useful for testing)
         """
         if model is None:
             model = self._model
 
-        # 1. semantic search
-        search_results = self._advisories.search(unstructured_query, top_k=top_k)
-
-        # 2. handle no results
+        # semantic search
+        search_results = self._advisories.search(unstructured_query)
         if not search_results:
             return _NO_SOURCES_ANSWER
+        context = "\n---\n\n".join(search_results)
 
-        # 3. build context and collect sources
-        context = self._format_context(search_results)
-
-        # 4. build prompt and generate answer
+        # build prompt and generate answer
         prompt = _ADVISORY_PROMPT.format(context=context, query=unstructured_query)
         answer = model.generate(prompt)
 
         return answer.strip()
-
-    def _format_context(self, search_results: list[tuple[Advisory, list[int]]]) -> str:
-        context_parts: list[str] = []
-
-        for advisory, section_indices in search_results:
-            # Add advisory header
-            context_parts.append(f"=== ADVISORY: {advisory.title} ===\n")
-
-            # Add relevant sections
-            for idx in section_indices:
-                section = advisory.sections[idx]
-                section_text = section.to_text()
-                if section_text.strip():
-                    context_parts.append(section_text)
-                    context_parts.append("")  # blank line between sections
-
-            context_parts.append("---\n")
-
-        return "\n".join(context_parts).strip()

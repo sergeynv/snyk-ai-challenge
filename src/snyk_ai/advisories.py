@@ -29,7 +29,7 @@ class Advisories:
         if not self.directory.is_dir():
             raise FileNotFoundError(f"Directory not found: {self.directory}")
 
-        self._advisories: dict[str, Advisory] = {}
+        self._advisories: dict[str, _Advisory] = {}
         self._load_advisories()
 
         # vector DB (initialized lazily via init_vectordb)
@@ -44,7 +44,7 @@ class Advisories:
             self._advisories[path.name] = advisory
         log(f"Loaded {len(self._advisories)} documents")
 
-    def _parse_advisory(self, path: Path, blocks: list[Block]) -> Advisory:
+    def _parse_advisory(self, path: Path, blocks: list[Block]) -> _Advisory:
         filename = path.name
 
         _validate_structure(filename, blocks)
@@ -55,7 +55,7 @@ class Advisories:
 
         log(f"Parsed {filename} advisory: {len(sections)} sections")
 
-        return Advisory(
+        return _Advisory(
             filename=filename,
             path=path,
             blocks=blocks,
@@ -74,23 +74,6 @@ class Advisories:
             (adv.title, adv.executive_summary)
             for adv in self._advisories.values()
         ]
-
-    def _get_all_chunks(self, model: Model) -> list[_Chunk]:
-        """Generate chunks from all advisories.
-
-        Args:
-            model: Model for summarizing code blocks.
-
-        Returns:
-            List of all chunks from all advisories.
-
-        Raises:
-            ValueError: If any section contains code blocks but no model is available.
-        """
-        chunks: list[_Chunk] = []
-        for advisory in self._advisories.values():
-            chunks.extend(advisory.get_chunks(model))
-        return chunks
 
     def init_vectordb(self, model: Model) -> None:
         """Initialize the vector database with all advisory chunks.
@@ -144,10 +127,12 @@ class Advisories:
 
                     ids.append(chunk_id)
                     documents.append(chunk.text)
-                    metadatas.append({
-                        "advisory_filename": advisory.filename,
-                        "section_index": section_idx,
-                    })
+                    metadatas.append(
+                        {
+                            "advisory_filename": advisory.filename,
+                            "section_index": section_idx,
+                        }
+                    )
 
         # 6. Add all chunks to collection in one batch
         if ids:
@@ -158,21 +143,19 @@ class Advisories:
             )
             log(f"Vector DB built ({len(ids)} chunks)")
 
-    def search(self, query: str, top_k: int = 5) -> list[tuple[Advisory, list[int]]]:
+    def search(self, query: str) -> list[str]:
         """Search for relevant sections matching the query.
 
         Queries the vector database for chunks semantically similar to the
-        query, then groups results by advisory and returns the relevant
-        section indices.
+        query, then returns formatted context strings for each matching advisory.
 
         Args:
             query: The search query text.
-            top_k: Maximum number of advisories to return (default: 5).
 
         Returns:
-            List of (Advisory, section_indices) tuples sorted by relevance
-            (best match first). Each advisory appears at most once.
-            section_indices are sorted by position in the document.
+            List of formatted context strings, one per matching advisory,
+            sorted by relevance (best match first). Each string contains
+            the advisory title header and relevant sections.
 
         Raises:
             RuntimeError: If init_vectordb() has not been called.
@@ -182,20 +165,20 @@ class Advisories:
                 "Vector database not initialized. Call init_vectordb() first."
             )
 
-        # Query for more chunks than needed to ensure enough unique advisories
+        TOP_K = 3  # maximum number of advisories to return
+
+        # query for more chunks than needed to ensure enough unique advisories
         results = self._collection.query(
             query_texts=[query],
-            n_results=min(top_k * 10, self._collection.count()),
+            n_results=min(TOP_K * 10, self._collection.count()),
             include=["metadatas", "distances"],
         )
 
-        # Group by advisory, collecting section indices and tracking best distance
-        # Key: advisory_filename -> (best_distance, set of section_indices)
+        # group by advisory, collecting section indices and tracking best distance
+        #   advisory_filename -> (best_distance, set of section_indices)
         advisory_matches: dict[str, tuple[float, set[int]]] = {}
 
-        for metadata, distance in zip(
-            results["metadatas"][0], results["distances"][0]
-        ):
+        for metadata, distance in zip(results["metadatas"][0], results["distances"][0]):
             filename = metadata["advisory_filename"]
             section_index = metadata["section_index"]
 
@@ -204,37 +187,40 @@ class Advisories:
             else:
                 best_dist, indices = advisory_matches[filename]
                 indices.add(section_index)
-                # Keep the best (lowest) distance
+                # keep the best (lowest) distance
                 if distance < best_dist:
                     advisory_matches[filename] = (distance, indices)
 
-        # Sort by best distance and take top_k advisories
-        sorted_matches = sorted(
-            advisory_matches.items(), key=lambda x: x[1][0]
-        )[:top_k]
+        # sort by best distance and take TOP_K advisories
+        sorted_matches = sorted(advisory_matches.items(), key=lambda x: x[1][0])[:TOP_K]
 
-        # Build result tuples
-        search_results: list[tuple[Advisory, list[int]]] = []
+        # build formatted context strings
+        search_results: list[str] = []
 
         for filename, (_, section_indices) in sorted_matches:
-            advisory = self._advisories[filename]
-            # Sort section indices by document position
+            if 1 not in section_indices:
+                # the second section (at index 1) is the "Executive Summary" - we always want to render it.
+                section_indices.add(1)
             sorted_indices = sorted(section_indices)
-            search_results.append((advisory, sorted_indices))
+
+            sections = self._advisories[filename].sections
+            parts: list[str] = []
+
+            if sorted_indices[0] != 0:
+                # the header of the first section (index 0) is the title of the document:
+                # if we are not including the whole section, we should still render the title
+                parts.append(sections[0].to_text(skip_content=True))
+                parts.append("")
+
+            for idx in sorted_indices:
+                section_text = sections[idx].to_text()
+                if section_text.strip():
+                    parts.append(section_text)
+                    parts.append("")
+
+            search_results.append("\n".join(parts))
 
         return search_results
-
-    def __getitem__(self, filename: str) -> Advisory:
-        return self._advisories[filename]
-
-    def __iter__(self):
-        return iter(self._advisories.values())
-
-    def __len__(self) -> int:
-        return len(self._advisories)
-
-    def __contains__(self, filename: str) -> bool:
-        return filename in self._advisories
 
 
 @dataclass
@@ -250,19 +236,25 @@ class Section:
     blocks: list[Block] = field(default_factory=list)
     """All content blocks in this section (until the next header)."""
 
-    def to_text(self) -> str:
+    def to_text(self, skip_header: bool = False, skip_content: bool = False) -> str:
         """Render section as markdown text for retrieval."""
-        parts = [f"## {self.header.content}"]
-        for block in self.blocks:
-            if block.type is BlockType.PARAGRAPH:
-                parts.append(block.content)
-            elif block.type is BlockType.CODE_BLOCK:
-                lang = block.language or ""
-                parts.append(f"```{lang}\n{block.content}\n```")
-            elif block.type is BlockType.LIST_ITEM:
-                parts.append(block.content)
-            elif block.type is BlockType.TABLE:
-                parts.append(block.content)
+        parts = []
+        if not skip_header:
+            h = self.header
+            parts.append(f"{'#' * h.level} {h.content}")
+
+        if not skip_content:
+            for block in self.blocks:
+                if block.type is BlockType.PARAGRAPH:
+                    parts.append(block.content)
+                elif block.type is BlockType.CODE_BLOCK:
+                    lang = block.language or ""
+                    parts.append(f"```{lang}\n{block.content}\n```")
+                elif block.type is BlockType.LIST_ITEM:
+                    parts.extend(block.lines)
+                elif block.type is BlockType.TABLE:
+                    parts.extend(block.lines)
+
         return "\n\n".join(parts)
 
     @property
@@ -434,7 +426,7 @@ def _validate_structure(filename: str, blocks: list[Block]) -> None:
 
 
 @dataclass
-class Advisory:
+class _Advisory:
     """A parsed security advisory document."""
 
     filename: str
