@@ -66,14 +66,7 @@ class Database:
     """Structured vulnerability data with tool-use interface for LLMs."""
 
     def __init__(self, directory: Path | str):
-        """Load CSV files from directory into SQLite.
-
-        Args:
-            directory: Path to directory containing CSV files.
-
-        Raises:
-            FileNotFoundError: If directory or required CSV files don't exist.
-        """
+        """Load CSV files from directory into SQLite."""
         self._directory = Path(directory).resolve()
 
         if not self._directory.is_dir():
@@ -92,13 +85,12 @@ class Database:
         """Load all CSV files into SQLite tables."""
         cursor = self._conn.cursor()
 
-        # Create tables and load data
         for table, columns in zip(TABLES, SCHEMAS):
-            # Create table
+            # CREATE TABLE {table} ...
             cols_def = ", ".join(columns)
             cursor.execute(f"CREATE TABLE {table} ({cols_def})")
 
-            # Load data from CSV
+            # INSERT INTO {table} VALUES ...
             csv_path = self._directory / f"{table}.csv"
             with open(csv_path, newline="") as f:
                 reader = csv.DictReader(f)
