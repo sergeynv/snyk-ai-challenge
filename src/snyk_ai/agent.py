@@ -2,8 +2,8 @@ from pathlib import Path
 
 from snyk_ai.advisories import Advisories
 from snyk_ai.advisories_rag import AdvisoriesRag
-from snyk_ai.database import Database
-from snyk_ai.database_rag import DatabaseRag
+from snyk_ai.structured_data_store import StructuredDataStore
+from snyk_ai.structured_data_rag import StructuredDataRag
 from snyk_ai.models import Model
 from snyk_ai.router import Router, RouteType
 from snyk_ai.synthesizer import Synthesizer
@@ -30,9 +30,9 @@ class Agent:
         log("Advisories initialized")
 
         log("Initializing other components...")
-        self._database = Database(csv_dir)
+        self._structured_store = StructuredDataStore(csv_dir)
         self._advisories_rag = AdvisoriesRag(advisories_rag_model, self._advisories)
-        self._database_rag = DatabaseRag(db_query_model, self._database)
+        self._structured_rag = StructuredDataRag(db_query_model, self._structured_store)
         self._synthesizer = Synthesizer(synthesizer_model)
         self._router = Router(router_model, self._advisories)
         log("All components initialized")
@@ -53,13 +53,15 @@ class Agent:
 
         if routing.route_type is RouteType.STRUCTURED:
             log("Querying database...")
-            return self._database_rag.query(routing.structured_query)
+            return self._structured_rag.handle_query(routing.structured_query)
 
         if routing.route_type is RouteType.HYBRID:
             log("1. Querying advisories...")
             unstructured_answer = self._advisories_rag.query(routing.unstructured_query)
             log("2. Querying database...")
-            structured_answer = self._database_rag.query(routing.structured_query)
+            structured_answer = self._structured_rag.handle_query(
+                routing.structured_query
+            )
             log("3. Synthesizing combined answer...")
             return self._synthesizer.synthesize(
                 user_query=query,

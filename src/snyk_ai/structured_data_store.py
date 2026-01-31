@@ -1,12 +1,12 @@
-"""Structured vulnerability database with tool-use interface for LLMs.
+"""Structured vulnerability data store with tool-use interface for LLMs.
 
 Public API
 ----------
-Database
+StructuredDataStore
     Main class for loading and querying vulnerability data.
 
     Constructor:
-        Database(directory)
+        StructuredDataStore(directory)
             Load CSV files from directory into SQLite (in-memory).
             Expects: vulnerabilities.csv, packages.csv,
                      severity_levels.csv, vulnerability_types.csv
@@ -40,6 +40,36 @@ TABLES = [
     "vulnerability_types",
 ]
 
+TOOLS_DESCRIPTION = """
+You have exactly 4 tools. Call them as JSON objects.
+
+TOOL 1: get_vulnerability
+  Look up ONE vulnerability by CVE ID.
+  Required: cve_id (string)
+  Example: {"tool": "get_vulnerability", "arguments": {"cve_id": "CVE-2024-1234"}}
+
+TOOL 2: search_vulnerabilities
+  Search/filter vulnerabilities. Use this for filtering by ecosystem, severity, type, or CVSS.
+  All arguments OPTIONAL:
+    - ecosystem: "npm", "pip", "maven", "go", "nuget", "rubygems"
+    - severity: "Critical", "High", "Medium", "Low"
+    - type: "SQL Injection", "Cross-Site Scripting (XSS)", "Remote Code Execution", etc.
+    - min_cvss / max_cvss: number 0.0-10.0
+  Example: {"tool": "search_vulnerabilities", "arguments": {"severity": "Critical", "ecosystem": "npm"}}
+
+TOOL 3: list_packages
+  List packages, optionally by ecosystem.
+  Optional: ecosystem (string)
+  Example: {"tool": "list_packages", "arguments": {"ecosystem": "pip"}}
+
+TOOL 4: get_statistics
+  Get counts/averages for the ENTIRE database (cannot filter).
+  Optional: group_by - ONLY allowed values: "ecosystem", "severity", "type"
+  NO other arguments accepted.
+  Example: {"tool": "get_statistics", "arguments": {}}
+  Example: {"tool": "get_statistics", "arguments": {"group_by": "severity"}}
+""".strip()
+
 SCHEMAS: list[list[str]] = [
     # vulnerabilities
     [
@@ -62,7 +92,7 @@ SCHEMAS: list[list[str]] = [
 ]
 
 
-class Database:
+class StructuredDataStore:
     """Structured vulnerability data with tool-use interface for LLMs."""
 
     def __init__(self, directory: Path | str):

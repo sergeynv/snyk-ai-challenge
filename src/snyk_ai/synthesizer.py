@@ -48,7 +48,7 @@ class Synthesizer:
             user_query: The original user question.
             router_reasoning: Why the router classified this as HYBRID.
             unstructured_answer: Answer from AdvisoriesRag.
-            structured_answer: Answer from DatabaseRag.
+            structured_answer: Answer from StructuredDataRag.
 
         Returns:
             Combined answer string.

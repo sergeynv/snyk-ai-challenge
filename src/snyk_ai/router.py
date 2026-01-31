@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from snyk_ai.advisories import Advisories
-from snyk_ai.database import SCHEMAS, TABLES
+from snyk_ai.structured_data_store import SCHEMAS, TABLES
 from snyk_ai.models import Model
 
 _DATABASE_OPERATIONS = """
